@@ -284,7 +284,7 @@ const PRODUCTS = [
   {id:7, cat:'025', img:'img_10', name:'壓接內牙直接頭', spec:'SUS304 / 4分', origPrice:92, price:87, unit:'個'},
   {id:8, cat:'025', img:'img_13', name:'壓接外牙彎頭', spec:'SUS304 / 4分', origPrice:94, price:89, unit:'個'},
   {id:9, cat:'025', img:'img_123', name:'壓接內牙彎頭', spec:'SUS304 / 4分', origPrice:96, price:91, unit:'個'},
-  {id:10, cat:'025', img:'img_act', name:'活動直接頭', spec:'SUS304 / 4分', origPrice:120, price:114, unit:'個'},
+  {id:10, cat:'025', img:'img_act', name:'活動直接頭', spec:'SUS304 / 4分', origPrice:120, price:114, unit:'個', soldOut:true},
   {id:11, cat:'025', img:'img_act_b', name:'活動彎頭', spec:'SUS304 / 4分', origPrice:133, price:126, unit:'個'},
   {id:12, cat:'025', img:'img_12', name:'六角立布', spec:'SUS304 / 4分', origPrice:34, price:32, unit:'個'},
   // ── 6分 (3/4") ──
@@ -372,9 +372,11 @@ function renderProducts(cat) {
           <input class="qty-input" type="number" value="${qtys[p.id]||1}" min="1" id="qty-${p.id}" onchange="setQty(${p.id},this.value)">
           <button class="qty-btn" onclick="changeQty(${p.id},1)">+</button>
         </div>
-        <button class="add-btn ${cart[p.id]?'added':''}" onclick="addToCart(${p.id})" id="btn-${p.id}">
+        ${p.soldOut
+          ? `<button class="add-btn" style="background:#aaa;cursor:not-allowed;" disabled>⏳ 補貨中</button>`
+          : `<button class="add-btn ${cart[p.id]?'added':''}" onclick="addToCart(${p.id})" id="btn-${p.id}">
           ${cart[p.id]?'✓ 已加入':'+ 加入購物車'}
-        </button>
+        </button>`}
       </div>
     </div>`;
   }).join('');
