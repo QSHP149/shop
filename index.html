@@ -107,6 +107,7 @@
     .product-grid { grid-template-columns: 1fr 1fr; }
     .option-grid { grid-template-columns: 1fr 1fr; }
   }
+  .option-card.disabled {opacity:.5;cursor:not-allowed;background:#f1f3f5;}
 </style>
 </head>
 <body>
@@ -197,6 +198,12 @@
           <div class="opt-icon">🏦</div><div class="opt-name">銀行匯款</div>
           <div class="opt-desc">3 天內完成匯款，回傳收據</div>
           <div class="opt-fee">手續費自付</div>
+        </label>
+        <label class="option-card" id="codCard" onclick="selectPayment(this,'cod')">
+          <input type="radio" name="payment" value="cod">
+          <div class="opt-icon">📦</div><div class="opt-name">超商貨到付款</div>
+          <div class="opt-desc" id="codDesc">取貨時於超商門市付款<br>可選 7-11・全家・萊爾富</div>
+          <div class="opt-fee">總金額 1 萬元以下</div>
         </label>
       </div>
       <div id="paymentNote" class="info-note" style="background:#f0fff4;border:1px solid #9ae6b4;color:#276749;">
@@ -458,6 +465,7 @@ function updateCart(){
   updateSummary(sub);
 }
 function updateSummary(sub){
+  refreshCOD(sub);
   const items=Object.values(cart);
   document.getElementById('summaryList').innerHTML=items.map(i=>
     `<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--muted);">
@@ -484,15 +492,38 @@ function selectShipping(el,id,fee){
   }
   updateSummary(Object.values(cart).reduce((s,i)=>s+(i.price||0)*i.qty,0));
 }
+const COD_LIMIT=10000;
+function cartSub(){return Object.values(cart).reduce((s,i)=>s+(i.price||0)*i.qty,0);}
+function codEligible(sub){return selectedShipping.id==='711'&&(sub+selectedShipping.fee)<=COD_LIMIT;}
+function refreshCOD(sub){
+  const card=document.getElementById('codCard');
+  if(!card) return;
+  const ok=codEligible(sub);
+  card.classList.toggle('disabled',!ok);
+  document.getElementById('codDesc').innerHTML=ok
+    ?'取貨時於超商門市付款<br>可選 7-11・全家・萊爾富'
+    :'<span style="color:#e74c3c;font-weight:700;">僅限「超商交貨便」且總金額 NT$10,000 以下</span>';
+  if(!ok&&selectedPayment==='cod'){
+    selectPayment(document.querySelector('#paymentOptions .option-card'),'linepay');
+  }
+}
 function selectPayment(el,id){
+  if(id==='cod'&&!codEligible(cartSub())){
+    alert('超商貨到付款僅限「超商交貨便」且總金額 NT$10,000 以下');
+    return;
+  }
   document.querySelectorAll('#paymentOptions .option-card').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected'); selectedPayment=id;
   const n=document.getElementById('paymentNote');
   const b=document.getElementById('bankInfo');
+  b.classList.add('hidden');
+  n.classList.remove('hidden');
   if(id==='linepay'){
     n.innerHTML='💚 <strong>LINE Pay：</strong>下單後請加 LINE <strong>@qshp</strong>，我們確認庫存後會傳送付款連結給您。';
     n.style.cssText='background:#f0fff4;border:1px solid #9ae6b4;color:#276749;border-radius:7px;padding:10px 14px;font-size:12px;margin-top:10px;line-height:1.7;';
-    n.classList.remove('hidden'); b.classList.add('hidden');
+  } else if(id==='cod'){
+    n.innerHTML='📦 <strong>超商貨到付款：</strong>下單後請加 LINE <strong>@qshp</strong>，我們確認庫存後出貨，商品到店後於超商門市取貨付款。請在備註欄填寫超商品牌及門市名稱。';
+    n.style.cssText='background:#fffaf0;border:1px solid #fbd38d;color:#744210;border-radius:7px;padding:10px 14px;font-size:12px;margin-top:10px;line-height:1.7;';
   } else {
     n.classList.add('hidden'); b.classList.remove('hidden');
   }
@@ -510,6 +541,7 @@ async function submitOrder(){
   const items=Object.values(cart);
   const sub=items.reduce((s,i)=>s+(i.price||0)*i.qty,0);
   const total=sub+selectedShipping.fee;
+  if(selectedPayment==='cod'&&!codEligible(sub)){alert('超商貨到付款僅限「超商交貨便」且總金額 NT$10,000 以下');return;}
   const orderNum='QS-'+Date.now().toString().slice(-8);
   const orderTime=new Date().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'});
   const btn=document.getElementById('submitBtn');
@@ -520,7 +552,7 @@ async function submitOrder(){
     email:document.getElementById('email').value.trim(),
     shipping:selectedShipping.id==='711'?'超商交貨便':'郵局郵寄',
     address:address||'（超商取貨）',
-    payment:selectedPayment==='linepay'?'LINE Pay':'銀行匯款',
+    payment:selectedPayment==='linepay'?'LINE Pay':(selectedPayment==='cod'?'超商貨到付款':'銀行匯款'),
     note:document.getElementById('note').value.trim(),
     items:items.map(i=>`${i.name}(${i.spec})x${i.qty} ${i.price?'NT$'+i.price*i.qty:'洽詢'}`).join(' | '),
     subtotal:'NT$'+sub,shippingFee:'NT$'+selectedShipping.fee,total:'NT$'+total
@@ -530,17 +562,22 @@ async function submitOrder(){
   }catch(e){}
   btn.disabled=false; btn.textContent='確認送出訂單'; loading.style.display='none';
   document.getElementById('orderNumber').textContent='訂單編號：'+orderNum;
-  const payDesc=selectedPayment==='linepay'
-    ?`請加 LINE <strong>@qshp</strong>，確認庫存後我們會傳送 LINE Pay 付款連結給您。`
-    :`請加 LINE <strong>@qshp</strong>，確認庫存後我們會提供匯款帳號給您。`;
-  const shipDesc=selectedShipping.id==='711'
-    ?'付款後 1–2 個工作天出貨至您指定的超商門市（7-11 / 全家 / 萊爾富）。'
-    :'付款後 1–2 個工作天以掛號郵件寄出，並提供追蹤碼。';
+  const isCod=selectedPayment==='cod';
+  const payDesc=isCod
+    ?`請加 LINE <strong>@qshp</strong>，確認庫存後我們會安排出貨，商品到店後請於超商門市取貨付款。`
+    :(selectedPayment==='linepay'
+      ?`請加 LINE <strong>@qshp</strong>，確認庫存後我們會傳送 LINE Pay 付款連結給您。`
+      :`請加 LINE <strong>@qshp</strong>，確認庫存後我們會提供匯款帳號給您。`);
+  const shipDesc=isCod
+    ?'確認庫存後 1–2 個工作天出貨至您指定的超商門市，取貨時付款。'
+    :(selectedShipping.id==='711'
+      ?'付款後 1–2 個工作天出貨至您指定的超商門市（7-11 / 全家 / 萊爾富）。'
+      :'付款後 1–2 個工作天以掛號郵件寄出，並提供追蹤碼。');
   document.getElementById('successDetail').innerHTML=
     `感謝 <strong>${name}</strong> 的訂購！<br><br>💳 ${payDesc}<br><br>🚚 ${shipDesc}<br><br>
     <a href="https://line.me/R/ti/p/@qshp" target="_blank"
       style="display:inline-block;margin-top:16px;background:#06C755;color:#fff;text-decoration:none;border-radius:10px;padding:14px 32px;font-size:16px;font-weight:700;">
-      💬 加入 LINE 完成付款
+      ${isCod?'💬 加入 LINE 確認訂單':'💬 加入 LINE 完成付款'}
     </a>
     <div style="font-size:12px;color:#999;margin-top:10px;">加入後請告知訂單編號，我們會盡快為您處理 🙏</div>`;
   document.getElementById('shop-section').style.display='none';
